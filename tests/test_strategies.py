@@ -62,6 +62,22 @@ def test_breakout_is_long_only(bars):
         mb.evaluate(bars([100.0] * 25), Position.SHORT)
 
 
+@pytest.mark.parametrize("module,position", [(mr, Position.FLAT), (mr, Position.LONG), (mr, Position.SHORT),
+                                             (mb, Position.FLAT), (mb, Position.LONG)])
+def test_precomputed_path_matches_live_evaluate_on_every_bar(bars, module, position):
+    import math
+    closes = [100 + 5 * math.sin(i / 3) + (i % 7) for i in range(80)]
+    volumes = [100 + 80 * (i % 5 == 0) for i in range(80)]
+    df = bars(closes, volumes)
+    rows = module.precompute(df).to_dict("records")
+    for t in range(len(df)):
+        live = module.evaluate(df.iloc[: t + 1], position)
+        fast = module.decide(rows[t], position)
+        assert live.action == fast.action, t
+        if live.action != Action.HOLD:
+            assert live.reason == fast.reason
+
+
 def test_missing_columns_raise(bars):
     df = bars([100.0] * 25).drop(columns=["volume"])
     with pytest.raises(ValueError):

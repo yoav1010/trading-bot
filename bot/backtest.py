@@ -10,9 +10,12 @@ Order of events on each bar t:
      Any order it produces is filled on bar t + 1 (step 1), never on bar t.
 
 Step 5 feeding step 1 of the NEXT bar is what keeps the backtest free of lookahead.
+Indicators are precomputed once for the whole series; they are causal (row t uses only
+bars up to t), and tests check the precomputed path matches the live `evaluate` path.
 """
 
-from dataclasses import dataclass
+import math
+from dataclasses import dataclass, replace
 from typing import Callable
 
 import pandas as pd
@@ -28,22 +31,29 @@ from bot.strategies.base import Action, Position, Signal
 @dataclass(frozen=True)
 class StrategySpec:
     name: str
-    evaluate: Callable
+    precompute: Callable     # (df, params) -> indicator DataFrame
+    decide: Callable         # (row, position, params) -> Signal
     params: object
-    stop_atr_mult: float
     trailing: bool           # trailing stop (True) or fixed stop (False)
     fractional: bool         # fractional quantities allowed (crypto) or whole shares
     periods_per_year: float  # bars per year, for annualizing the Sharpe ratio
-    window: int              # bars the strategy needs to produce a signal
+
+    @property
+    def stop_atr_mult(self) -> float:
+        return self.params.stop_atr_mult
+
+    def with_params(self, **changes) -> "StrategySpec":
+        """Copy of this spec with some strategy parameters changed (used by tuning)."""
+        return replace(self, params=replace(self.params, **changes))
 
 
 SPY_MEAN_REVERSION = StrategySpec(
-    "SPY mean reversion", mean_reversion.evaluate, MEAN_REVERSION, MEAN_REVERSION.stop_atr_mult,
-    trailing=False, fractional=False, periods_per_year=26 * 252, window=MEAN_REVERSION.lookback)
+    "SPY mean reversion", mean_reversion.precompute, mean_reversion.decide, MEAN_REVERSION,
+    trailing=False, fractional=False, periods_per_year=26 * 252)
 
 BTC_BREAKOUT = StrategySpec(
-    "BTC breakout", momentum_breakout.evaluate, BREAKOUT, BREAKOUT.stop_atr_mult,
-    trailing=True, fractional=True, periods_per_year=24 * 365, window=BREAKOUT.lookback + 1)
+    "BTC breakout", momentum_breakout.precompute, momentum_breakout.decide, BREAKOUT,
+    trailing=True, fractional=True, periods_per_year=24 * 365)
 
 
 @dataclass
@@ -59,14 +69,23 @@ class BacktestResult:
 TRADE_COLUMNS = ["entry_time", "exit_time", "side", "qty", "entry_price", "exit_price",
                  "pnl", "return_pct", "entry_reason", "exit_reason"]
 
+MIN_BARS = 22
+
 
 def run(df: pd.DataFrame, spec: StrategySpec, initial_equity: float = 10_000.0,
-        slippage: float = 0.0005, risk: RiskParams = RISK) -> BacktestResult:
-    """Backtest one strategy on OHLCV bars (oldest first)."""
-    if len(df) < spec.window + 2:
-        raise ValueError(f"need at least {spec.window + 2} bars, got {len(df)}")
+        slippage: float = 0.0005, risk: RiskParams = RISK, trade_from: int = 0) -> BacktestResult:
+    """Backtest one strategy on OHLCV bars (oldest first).
 
-    atr_values = atr(df, risk.atr_period)
+    Bars before `trade_from` only warm up the indicators: no orders are filled there and
+    the equity curve, benchmark and stats start at `trade_from`.
+    """
+    if len(df) - trade_from < MIN_BARS:
+        raise ValueError(f"need at least {MIN_BARS} bars to trade, got {len(df) - trade_from}")
+
+    rows = spec.precompute(df, spec.params).to_dict("records")
+    atr_values = atr(df, risk.atr_period).to_numpy()
+    opens, highs, lows, closes = (df[c].to_numpy() for c in ("open", "high", "low", "close"))
+    index = df.index
     guard = DrawdownGuard(max_drawdown=risk.max_drawdown)
 
     cash = initial_equity
@@ -90,18 +109,17 @@ def run(df: pd.DataFrame, spec: StrategySpec, initial_equity: float = 10_000.0,
         })
         qty, side, stop = 0.0, Position.FLAT, 0.0
 
-    for t in range(len(df)):
-        bar = df.iloc[t]
-        when = df.index[t]
+    for t in range(trade_from, len(df)):
+        when = index[t]
 
         # 1. Fill the order signalled on the previous bar, at this bar's open.
         if pending is not None:
             if pending.action == Action.EXIT and side != Position.FLAT:
-                close_position(bar["open"], when, pending.reason)
+                close_position(opens[t], when, pending.reason)
             elif pending.action in (Action.ENTER_LONG, Action.ENTER_SHORT) and side == Position.FLAT:
                 new_side = Position.LONG if pending.action == Action.ENTER_LONG else Position.SHORT
-                fill = bar["open"] * (1 + slippage) if new_side == Position.LONG else bar["open"] * (1 - slippage)
-                signal_atr = atr_values.iloc[t - 1]  # the ATR known when the signal fired
+                fill = opens[t] * (1 + slippage) if new_side == Position.LONG else opens[t] * (1 - slippage)
+                signal_atr = atr_values[t - 1]  # the ATR known when the signal fired
                 size = position_size(cash, fill, signal_atr, spec.stop_atr_mult, spec.fractional, risk)
                 if size > 0:
                     side = new_side
@@ -112,12 +130,12 @@ def run(df: pd.DataFrame, spec: StrategySpec, initial_equity: float = 10_000.0,
             pending = None
 
         # 2. Stop check inside the bar.
-        if side != Position.FLAT and stop_hit(side, bar["low"], bar["high"], stop):
-            exit_price = min(bar["open"], stop) if side == Position.LONG else max(bar["open"], stop)
+        if side != Position.FLAT and stop_hit(side, lows[t], highs[t], stop):
+            exit_price = min(opens[t], stop) if side == Position.LONG else max(opens[t], stop)
             close_position(exit_price, when, f"Stop hit at {stop:.2f}")
 
         # 3. Mark to market and update the circuit breaker.
-        value = cash + qty * bar["close"]
+        value = cash + qty * closes[t]
         equity.append(value)
         trading_allowed = guard.update(value)
         if not trading_allowed and side != Position.FLAT:
@@ -125,26 +143,28 @@ def run(df: pd.DataFrame, spec: StrategySpec, initial_equity: float = 10_000.0,
             continue
 
         # 4. Trail the stop.
-        bar_atr = atr_values.iloc[t]
-        if side != Position.FLAT and spec.trailing and pd.notna(bar_atr):
-            stop = trailing_stop(stop, bar["close"], bar_atr, spec.stop_atr_mult, side)
+        bar_atr = atr_values[t]
+        atr_ready = not math.isnan(bar_atr)
+        if side != Position.FLAT and spec.trailing and atr_ready:
+            stop = trailing_stop(stop, closes[t], bar_atr, spec.stop_atr_mult, side)
 
         # 5. New signal from closed bars only; it fills on the next bar.
-        if t + 1 >= len(df) or t + 1 < spec.window:
+        if t + 1 >= len(df):
             continue
-        signal = spec.evaluate(df.iloc[t + 1 - spec.window: t + 1], side, spec.params)
+        signal = spec.decide(rows[t], side, spec.params)
         is_entry = signal.action in (Action.ENTER_LONG, Action.ENTER_SHORT)
-        if signal.action == Action.HOLD or (is_entry and (not trading_allowed or pd.isna(bar_atr))):
+        if signal.action == Action.HOLD or (is_entry and (not trading_allowed or not atr_ready)):
             continue
         pending = signal
 
     # Close anything still open at the last close so the stats include it.
     if side != Position.FLAT:
-        close_position(df["close"].iloc[-1], df.index[-1], "End of backtest")
+        close_position(closes[-1], index[-1], "End of backtest")
         equity[-1] = cash
 
-    equity_series = pd.Series(equity, index=df.index, name="strategy")
-    benchmark = (initial_equity * df["close"] / df["close"].iloc[0]).rename("buy_and_hold")
+    equity_series = pd.Series(equity, index=index[trade_from:], name="strategy")
+    traded = df["close"].iloc[trade_from:]
+    benchmark = (initial_equity * traded / traded.iloc[0]).rename("buy_and_hold")
     trades_df = pd.DataFrame(trades, columns=TRADE_COLUMNS)
     return BacktestResult(
         spec=spec,

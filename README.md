@@ -44,6 +44,29 @@ Real historical data from Yahoo Finance, $10,000 simulated starting equity, 0.05
 
 Reproduce with `python -m bot.report` (add `--refresh` to download fresh data). Trade-by-trade logs, including the reason for every entry and exit, are in `docs/trades_*.csv`.
 
+## Walk-forward tuning (out-of-sample)
+
+Choosing the parameters that did best on all the data and then reporting that result is overfitting. Instead, `bot/tuning.py` slides a train window and a test window through the data:
+- On each **train** window it tries every parameter combination (18 per strategy) and picks the best Sharpe ratio.
+- It then runs only that choice on the following **test** window, which the tuning never saw.
+
+The table below stitches the test windows together. Each window starts from fresh equity and a fresh circuit breaker, so these numbers differ from the full-period backtest above.
+
+| Out-of-sample | Tuned (walk-forward) | Defaults | Buy and hold |
+|---|---|---|---|
+| **BTC** (6 test windows of ~3 months, May 2025 to Nov 2026) | **+3.4%**, max DD 4.3%, Sharpe 0.48 | +1.5%, max DD 4.8%, Sharpe 0.26 | -25.1%, max DD 53.1% |
+| **SPY** (3 test windows of 10 trading days, Sep to Nov 2026) | -0.7%, max DD 1.0% | -3.0%, max DD 3.7% | -0.9%, max DD 4.0% |
+
+**How to read this:**
+- **BTC:** tuning beat the defaults out of sample and avoided buy and hold's 53% drawdown. But the edge is small, and much of it comes from a few trades in August 2026, so this is not evidence of a reliable profit.
+- **SPY:** every fold chose the same settings (40-bar lookback, 2.0 std-dev entry, 2-ATR stop). That consistency is a good sign, and it cut losses from -3.0% to -0.7%. Still, only about 32 test trades over 60 days is far too small a sample to conclude anything.
+- **Both:** low exposure keeps drawdowns small. The next step is more history from Alpaca, especially for SPY.
+
+![BTC walk-forward](docs/walkforward_btc.png)
+![SPY walk-forward](docs/walkforward_spy.png)
+
+Full fold-by-fold tables, including the parameters each fold chose: `docs/walkforward_summary.md`. Reproduce with `python -m bot.tuning`.
+
 ## Project layout
 
 ```
@@ -55,6 +78,7 @@ bot/
   metrics.py                return, max drawdown, Sharpe, win rate, profit factor
   data.py                   historical bars from Yahoo Finance, cached in data/raw/
   report.py                 runs both backtests, saves charts and the summary table to docs/
+  tuning.py                 walk-forward parameter tuning with out-of-sample results
   strategies/
     base.py                 Signal / Action / Position types
     mean_reversion.py       SPY strategy
@@ -82,7 +106,7 @@ py -m venv .venv
 
 - [x] Indicators, both strategies, risk manager, unit tests
 - [x] Backtester with equity curve and stats compared against buy-and-hold
-- [ ] Parameter experiments with walk-forward testing (tune on older data, test on newer)
+- [x] Walk-forward parameter tuning (tune on older data, test on newer)
 - [ ] Alpaca paper-trading connection and trade log
 - [ ] Scheduled runs on GitHub Actions
 - [ ] React + TypeScript dashboard on GitHub Pages
