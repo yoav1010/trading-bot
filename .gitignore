@@ -1,0 +1,11 @@
+# Secrets: Alpaca keys live in .env locally and in GitHub Secrets in CI. Never commit them.
+.env
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Large or regenerable data
+data/raw/
