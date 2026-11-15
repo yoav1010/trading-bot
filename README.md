@@ -67,6 +67,33 @@ The table below stitches the test windows together. Each window starts from fres
 
 Full fold-by-fold tables, including the parameters each fold chose: `docs/walkforward_summary.md`. Reproduce with `python -m bot.tuning`.
 
+## Paper trading on Alpaca
+
+`python -m bot.live` checks both markets once and trades on **Alpaca's paper account**: simulated money, real prices. It's built to run every 15 minutes.
+
+**Safety by design:** the broker wrapper always connects with `paper=True` and refuses to start if `ALPACA_PAPER` is anything but `true`. There is no live-money option in this codebase.
+
+**Each run:**
+1. Fetch recent bars and drop the one still forming. Act only on a new closed bar, never on the same bar twice.
+2. Skip SPY while the market is closed.
+3. Exit on a stop hit or a tripped circuit breaker. Trail the BTC stop.
+4. Ask the strategy for a signal and place a market order if needed.
+5. Append everything to `logs/signals.csv`, `logs/trades.csv` and `logs/equity.csv`. The dashboard reads these.
+
+State that must survive between runs (last bar seen, stop prices, equity peak) lives in `state/bot_state.json`. Positions and equity always come from Alpaca.
+
+**Live parameters** come from the most recent walk-forward fold. SPY uses a 40-bar lookback, a 2.0 std-dev entry and a 2-ATR stop, which every fold chose. BTC uses the defaults, which the latest fold chose.
+
+**Setup:**
+1. Create a free Alpaca account and generate **paper-trading** API keys.
+2. Copy `.env.example` to `.env` and paste in the paper keys. `.env` is git-ignored.
+3. Run `.venv\Scripts\python -m bot.live`.
+
+**Known differences from the backtest:**
+- **Fills:** orders fill near the next bar's open, but the stop is computed from the signal bar's close.
+- **SPY data:** comes from Alpaca's free IEX feed, not the full consolidated feed.
+- **BTC volume:** Alpaca only reports volume on its own venue, which is far lower than Yahoo's market-wide volume. The volume ratio still works but is noisier.
+
 ## Project layout
 
 ```
@@ -79,6 +106,8 @@ bot/
   data.py                   historical bars from Yahoo Finance, cached in data/raw/
   report.py                 runs both backtests, saves charts and the summary table to docs/
   tuning.py                 walk-forward parameter tuning with out-of-sample results
+  broker.py                 Alpaca paper-trading wrapper (paper only, by construction)
+  live.py                   scheduled runner: signals, orders, stops, state and CSV logs
   strategies/
     base.py                 Signal / Action / Position types
     mean_reversion.py       SPY strategy
@@ -107,6 +136,6 @@ py -m venv .venv
 - [x] Indicators, both strategies, risk manager, unit tests
 - [x] Backtester with equity curve and stats compared against buy-and-hold
 - [x] Walk-forward parameter tuning (tune on older data, test on newer)
-- [ ] Alpaca paper-trading connection and trade log
+- [x] Alpaca paper-trading connection and trade log
 - [ ] Scheduled runs on GitHub Actions
 - [ ] React + TypeScript dashboard on GitHub Pages
