@@ -9,3 +9,7 @@ __pycache__/
 
 # Large or regenerable data
 data/raw/
+
+# Bot logs and state live on the paper-log branch, not main
+state/
+logs/

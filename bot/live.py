@@ -18,6 +18,7 @@ state/bot_state.json. The broker is the source of truth for positions and equity
 
 import csv
 import json
+import os
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -31,8 +32,10 @@ from bot.risk import initial_stop, position_size, stop_hit, trailing_stop
 from bot.strategies.base import Action, Position
 
 ROOT = Path(__file__).resolve().parents[1]
-STATE_FILE = ROOT / "state" / "bot_state.json"
-LOG_DIR = ROOT / "logs"
+# GitHub Actions points these at a checkout of the `paper-log` branch, so the bot's
+# frequent log commits stay out of the main code history.
+STATE_FILE = Path(os.environ.get("BOT_STATE_FILE", ROOT / "state" / "bot_state.json"))
+LOG_DIR = Path(os.environ.get("BOT_LOG_DIR", ROOT / "logs"))
 MIN_BARS = 60
 
 
@@ -192,8 +195,18 @@ def run(broker, now: datetime | None = None, state_path: Path = STATE_FILE, log_
 def main() -> None:
     from bot.broker import AlpacaPaperBroker, load_dotenv
 
+    from alpaca.common.exceptions import APIError
+
     load_dotenv(str(ROOT / ".env"))
-    summaries = run(AlpacaPaperBroker())
+    broker = AlpacaPaperBroker()
+    try:
+        broker.equity()
+    except APIError as exc:
+        if "unauthorized" in str(exc).lower() or "forbidden" in str(exc).lower():
+            raise SystemExit("Alpaca rejected the API keys. Use PAPER trading keys (Key ID starts "
+                             "with PK) from the Paper Trading dashboard, and check .env.") from None
+        raise
+    summaries = run(broker)
     for line in summaries:
         print(line)
     if any(": ERROR " in line for line in summaries):

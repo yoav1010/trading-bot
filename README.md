@@ -89,6 +89,12 @@ State that must survive between runs (last bar seen, stop prices, equity peak) l
 2. Copy `.env.example` to `.env` and paste in the paper keys. `.env` is git-ignored.
 3. Run `.venv\Scripts\python -m bot.live`.
 
+**Automation (free):**
+- `.github/workflows/paper-trade.yml` runs the bot on GitHub Actions 2 minutes after every 15-minute bar closes.
+- The Alpaca paper keys come from GitHub Secrets.
+- Each run's logs and state are committed to the **`paper-log` branch**, which gives a public, timestamped record of every decision without cluttering `main`.
+- `.github/workflows/tests.yml` runs the test suite on every push.
+
 **Known differences from the backtest:**
 - **Fills:** orders fill near the next bar's open, but the stop is computed from the signal bar's close.
 - **SPY data:** comes from Alpaca's free IEX feed, not the full consolidated feed.
