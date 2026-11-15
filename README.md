@@ -2,6 +2,8 @@
 
 An automated trading bot that runs two rule-based strategies on **Alpaca paper trading** (simulated money, real market prices), with a public dashboard that shows every trade and the reason it fired.
 
+**Live dashboard:** https://yoav1010.github.io/trading-bot/
+
 > Paper trading only. This is an engineering project, not financial advice, and it makes no claims about profit.
 
 ## Strategies
@@ -100,6 +102,18 @@ State that must survive between runs (last bar seen, stop prices, equity peak) l
 - **SPY data:** comes from Alpaca's free IEX feed, not the full consolidated feed.
 - **BTC volume:** Alpaca only reports volume on its own venue, which is far lower than Yahoo's market-wide volume. The volume ratio still works but is noisier.
 
+## Dashboard
+
+`dashboard/` is a React + TypeScript single-page app, deployed to GitHub Pages by `.github/workflows/dashboard.yml`. It reads the bot's CSV logs straight from the `paper-log` branch in the browser, so it updates as the bot runs, with no rebuild or server. It shows:
+- **Account:** paper equity, change since the first run, last run time, and circuit-breaker status.
+- **Equity curve:** account value over time.
+- **Market charts:** each market's closes, with every buy, short and exit marked.
+- **Decision log:** what the bot decided on each bar, with its reason in plain English.
+- **Orders:** every order, with its quantity, price and stop.
+- **Research:** the backtest and walk-forward charts.
+
+Charts use TradingView's open-source `lightweight-charts`. Run it locally with `npm install` then `npm run dev` inside `dashboard/`. Add `?sample` to the URL in dev mode to preview with a local sample generated from the backtest.
+
 ## Project layout
 
 ```
@@ -143,5 +157,5 @@ py -m venv .venv
 - [x] Backtester with equity curve and stats compared against buy-and-hold
 - [x] Walk-forward parameter tuning (tune on older data, test on newer)
 - [x] Alpaca paper-trading connection and trade log
-- [ ] Scheduled runs on GitHub Actions
-- [ ] React + TypeScript dashboard on GitHub Pages
+- [x] Scheduled runs on GitHub Actions
+- [x] React + TypeScript dashboard on GitHub Pages
