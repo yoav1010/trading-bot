@@ -1,0 +1,2 @@
+run_time,symbol,action,qty,ref_price,stop,reason,order_id
+2026-11-16T18:47:24+00:00,SPY,enter_long,33.0,739.93,736.844282245716,Close 739.93 is 2.14 std devs below the 40-bar mean 748.77,7292b0a3-3e65-453f-a7b0-c268ce294445
