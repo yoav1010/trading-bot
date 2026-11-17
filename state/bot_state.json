@@ -2,7 +2,7 @@
   "breaker_tripped": false,
   "markets": {
     "BTC/USD": {
-      "last_bar": "2026-11-16T17:00:00+00:00",
+      "last_bar": "2026-11-17T01:00:00+00:00",
       "stop": null
     },
     "SPY": {
@@ -10,5 +10,5 @@
       "stop": 736.844282245716
     }
   },
-  "peak_equity": 100000.0
+  "peak_equity": 100024.75
 }

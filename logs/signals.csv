@@ -4,3 +4,4 @@ run_time,bar_time,symbol,position,action,reason,close,equity
 2026-11-16T08:20:52+00:00,2026-11-16T07:00:00+00:00,BTC/USD,flat,hold,No breakout,64927.8865,100000.0
 2026-11-16T18:47:24+00:00,2026-11-16T18:30:00+00:00,SPY,flat,enter_long,Close 739.93 is 2.14 std devs below the 40-bar mean 748.77,739.93,100000.0
 2026-11-16T18:47:24+00:00,2026-11-16T17:00:00+00:00,BTC/USD,flat,hold,No breakout,64840.695,100000.0
+2026-11-17T02:08:38+00:00,2026-11-17T01:00:00+00:00,BTC/USD,flat,hold,No breakout,64680.1025,100024.75
