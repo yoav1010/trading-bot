@@ -13,3 +13,4 @@ run_time,bar_time,symbol,position,action,reason,close,equity
 2026-11-18T18:40:49+00:00,2026-11-18T18:15:00+00:00,SPY,flat,hold,"z = 0.43, inside +/-2.0",731.995,99693.82
 2026-11-18T18:40:49+00:00,2026-11-18T17:00:00+00:00,BTC/USD,flat,hold,No breakout,63034.715,99693.82
 2026-11-19T00:45:18+00:00,2026-11-18T23:00:00+00:00,BTC/USD,flat,hold,No breakout,62983.1135,99693.82
+2026-11-19T07:58:54+00:00,2026-11-19T06:00:00+00:00,BTC/USD,flat,hold,No breakout,63683.3465,99693.82
