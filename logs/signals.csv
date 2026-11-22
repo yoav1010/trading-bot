@@ -26,3 +26,4 @@ run_time,bar_time,symbol,position,action,reason,close,equity
 2026-11-21T22:26:09+00:00,2026-11-21T21:00:00+00:00,BTC/USD,flat,hold,No breakout,60355.0,98693.25
 2026-11-22T02:31:26+00:00,2026-11-22T01:00:00+00:00,BTC/USD,flat,hold,No breakout,59985.95,98693.25
 2026-11-22T10:11:38+00:00,2026-11-22T09:00:00+00:00,BTC/USD,flat,enter_long,Close 61031.60 broke the 20-bar high 60873.81 on 2.0x average volume,61031.6,98693.25
+2026-11-22T17:50:06+00:00,2026-11-22T16:00:00+00:00,BTC/USD,long,hold,Trend intact,61170.15,98509.94
