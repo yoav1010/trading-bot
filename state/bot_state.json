@@ -2,7 +2,7 @@
   "breaker_tripped": false,
   "markets": {
     "BTC/USD": {
-      "last_bar": "2026-11-26T04:00:00+00:00",
+      "last_bar": "2026-11-26T14:00:00+00:00",
       "stop": null
     },
     "SPY": {
